@@ -1,63 +1,77 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { Pool } from "pg";
 
+// Initialize database connection
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL, 
+  connectionString: process.env.DATABASE_URL,
 });
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method === "GET") {
-    
-    // WhatsApp Webhook Verification
-    const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
-    if (req.query["hub.verify_token"] === VERIFY_TOKEN) {
-      return res.status(200).send(req.query["hub.challenge"]);
-    }
-    return res.status(403).send("Verification failed");
-  }
-
   if (req.method === "POST") {
     try {
       const data = req.body;
-      console.log("Webhook Received:", data);
-
-      if (data.entry) {
-        for (const entry of data.entry) {
-          const changes = entry.changes || [];
-          for (const change of changes) {
-            if (change.value && change.value.messages) {
-              for (const message of change.value.messages) {
-                console.log("New Message:", message);
-                await saveMessageToDatabase(message);
-              }
-            }
-          }
-        }
+      console.log("Received WhatsApp webhook:", JSON.stringify(data, null, 2));
+      
+      if (data.object !== "whatsapp_business_account") {
+        return res.status(400).json({ message: "Invalid object type" });
       }
-      return res.status(200).json({ success: true });
+
+      // Process incoming messages
+      const messages = data.entry?.[0]?.changes?.[0]?.value?.messages;
+      if (!messages) {
+        return res.status(200).json({ message: "No new messages" });
+      }
+
+      for (const message of messages) {
+        await saveMessageToDatabase(message);
+      }
+
+      res.status(200).json({ message: "Messages processed successfully" });
     } catch (error) {
       console.error("Error processing webhook:", error);
-      return res.status(500).json({ error: "Internal Server Error" });
+      res.status(500).json({ message: "Internal server error" });
     }
+  } else {
+    res.setHeader("Allow", ["POST"]);
+    res.status(405).end(`Method ${req.method} Not Allowed`);
   }
-
-  return res.status(405).json({ error: "Method Not Allowed" });
 }
 
+// Function to handle different types of messages and store them in DB
 async function saveMessageToDatabase(message: any) {
   try {
+    let messageBody = "";
+    let messageType = message.type;  // Extract type
+
+    // Handle different message formats
+    if (messageType === "text") {
+      messageBody = message.text.body;
+    } else if (["image", "video", "audio", "document"].includes(messageType)) {
+      messageBody = message[messageType].url;  // Store media URL
+    } else if (messageType === "order") {
+      messageBody = JSON.stringify(message.order.items); // Store order details
+    } else if (messageType === "interactive") {
+      messageBody = JSON.stringify(message.interactive);
+    } else {
+      messageBody = "Unsupported message type";
+    }
+
+    // Insert message into the database
     const query = `
-      INSERT INTO whatsapp_messages (id, from_number, message_body, timestamp)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO whatsapp_messages (id, from_number, message_type, message_body, timestamp)
+      VALUES ($1, $2, $3, $4, $5)
       ON CONFLICT (id) DO NOTHING;
     `;
+    
     await pool.query(query, [
       message.id,
       message.from,
-      message.text.body,
+      messageType,  // Store message type
+      messageBody,
       new Date(),
     ]);
-    console.log("Message saved to database");
+    
+    console.log(`Saved ${messageType} message to database`);
   } catch (error) {
     console.error("Database error:", error);
   }
