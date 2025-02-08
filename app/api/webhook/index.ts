@@ -1,12 +1,26 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { Pool } from "pg";
+import { drizzle } from "drizzle-orm/vercel-postgres";
+import { sql } from "@vercel/postgres";
+import { whatsappMessages } from "../../db/schema";
 
-// Initialize database connection
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
+const db = drizzle(sql);
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method === "GET") {
+    // Webhook verification
+    const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN;
+    const mode = req.query["hub.mode"];
+    const token = req.query["hub.verify_token"];
+    const challenge = req.query["hub.challenge"];
+
+    if (mode === "subscribe" && token === VERIFY_TOKEN) {
+      console.log("Webhook verified successfully");
+      return res.status(200).send(challenge);
+    } else {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+  }
+  
   if (req.method === "POST") {
     try {
       const data = req.body;
@@ -32,12 +46,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       res.status(500).json({ message: "Internal server error" });
     }
   } else {
-    res.setHeader("Allow", ["POST"]);
+    res.setHeader("Allow", ["GET", "POST"]);
     res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 }
 
-// Function to handle different types of messages and store them in DB
+// Function to handle different types of messages and store them in DB using Drizzle
 async function saveMessageToDatabase(message: any) {
   try {
     let messageBody = "";
@@ -56,20 +70,14 @@ async function saveMessageToDatabase(message: any) {
       messageBody = "Unsupported message type";
     }
 
-    // Insert message into the database
-    const query = `
-      INSERT INTO whatsapp_messages (id, from_number, message_type, message_body, timestamp)
-      VALUES ($1, $2, $3, $4, $5)
-      ON CONFLICT (id) DO NOTHING;
-    `;
-    
-    await pool.query(query, [
-      message.id,
-      message.from,
-      messageType,  // Store message type
-      messageBody,
-      new Date(),
-    ]);
+    // Insert message into the database using Drizzle ORM
+    await db.insert(whatsappMessages).values({
+      id: message.id,
+      fromNumber: message.from,
+      messageType: messageType,
+      messageBody: messageBody,
+      timestamp: new Date(),
+    }).onConflictDoNothing();
     
     console.log(`Saved ${messageType} message to database`);
   } catch (error) {
