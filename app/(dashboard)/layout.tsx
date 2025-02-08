@@ -5,8 +5,10 @@ import {
   Package,
   Package2,
   PanelLeft,
+  Send,
   Settings,
   ShoppingCart,
+  StretchVertical,
   Users2
 } from 'lucide-react';
 
@@ -31,6 +33,8 @@ import { VercelLogo } from '@/components/icons';
 import Providers from './providers';
 import { NavItem } from './nav-item';
 import { SearchInput } from './search';
+import ChatHub from "@/components/ChatHub";
+import KanbanBoard from "@/components/KanbanBoard";
 
 export default function DashboardLayout({
   children
@@ -67,12 +71,21 @@ function DesktopNav() {
           className="group flex h-9 w-9 shrink-0 items-center justify-center gap-2 rounded-full bg-primary text-lg font-semibold text-primary-foreground md:h-8 md:w-8 md:text-base"
         >
           <VercelLogo className="h-3 w-3 transition-all group-hover:scale-110" />
-          <span className="sr-only">Acme Inc</span>
+          <span className="sr-only">Waba</span>
         </Link>
 
         <NavItem href="#" label="Dashboard">
           <Home className="h-5 w-5" />
         </NavItem>
+
+        <NavItem href="/ChatHub.tsx" label="Chat Hub">
+          <Send className="h-5 w-5" />
+        </NavItem>
+
+        <NavItem href="/KanbanBoard.tsx" label="Kanban Board">
+         <StretchVertical className="h-5 w-5" />
+        </NavItem>
+
 
         <NavItem href="#" label="Orders">
           <ShoppingCart className="h-5 w-5" />
@@ -137,6 +150,23 @@ function MobileNav() {
             href="#"
             className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground"
           >
+            <Send className="h-5 w-5" />
+            ChatHub
+          </Link>
+          <Link
+            href="ChatHub.tsx"
+            className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground"
+          >
+
+            <StretchVertical className="h-5 w-5" />
+            Kanban Board
+          </Link>
+          <Link
+            href="/KanbanBoard.tsx"
+            className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground"
+          >
+
+
             <ShoppingCart className="h-5 w-5" />
             Orders
           </Link>
